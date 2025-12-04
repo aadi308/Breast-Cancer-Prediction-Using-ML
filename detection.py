@@ -804,3 +804,250 @@ plt.ylabel('Accuracy')
 plt.title('Comparative Accuracy of Classification Models (Including K-Means Clustering)')
 plt.tight_layout()
 plt.show()
+
+def evaluate_models(test_size):
+    X = cancer_df.drop(['target', 'cluster_label'], axis=1) # Exclude target and cluster_label for X
+    y = cancer_df['target']
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=51)
+
+    # Standardize the features
+    sc = StandardScaler()
+    X_train_sc = sc.fit_transform(X_train)
+    X_test_sc = sc.transform(X_test)
+
+    # Helper function to get all relevant metrics (already defined in the notebook, reusing)
+    # def get_all_metrics(y_true, y_pred):
+    #     return {
+    #         'Accuracy': accuracy_score(y_true, y_pred),
+    #         'Precision': precision_score(y_true, y_pred, average='weighted'),
+    #         'Recall': recall_score(y_true, y_pred, average='weighted'),
+    #         'F1-Score': f1_score(y_true, y_pred, average='weighted')
+    #     }
+
+    all_model_metrics = {}
+
+    models = {
+        'SVC': SVC(random_state=51),
+        'KNeighborsClassifier': KNeighborsClassifier(n_neighbors=5, metric='minkowski', p=2),
+        'GaussianNB': GaussianNB(),
+        'DecisionTreeClassifier': DecisionTreeClassifier(random_state=51),
+        'AdaBoostClassifier': AdaBoostClassifier(DecisionTreeClassifier(random_state=51), n_estimators=2000, learning_rate=0.1, algorithm='SAMME', random_state=51),
+        'LogisticRegression': LogisticRegression(random_state=51, max_iter=5000),
+        'RandomForestClassifier': RandomForestClassifier(random_state=51),
+        'XGBClassifier': XGBClassifier(eval_metric='logloss', random_state=51)
+    }
+
+    for name, model in models.items():
+        # Unscaled Data
+        model.fit(X_train, y_train)
+        y_pred_unscaled = model.predict(X_test)
+        all_model_metrics[f'{name} (Unscaled)'] = get_all_metrics(y_test, y_pred_unscaled)
+
+        # Scaled Data
+        # Some models (like AdaBoost with DecisionTree base estimator) might need a fresh instance
+        # if they modify the base estimator during fit, or if random_state is critical for base_estimator.
+        # Re-instantiate models that benefit from it, or where a fresh fit is cleaner.
+        if name == 'AdaBoostClassifier':
+            scaled_model = AdaBoostClassifier(DecisionTreeClassifier(random_state=51), n_estimators=2000, learning_rate=0.1, algorithm='SAMME', random_state=51)
+        elif name == 'SVC':
+            scaled_model = SVC(random_state=51) # SVC benefits greatly from scaling
+        elif name == 'LogisticRegression':
+            scaled_model = LogisticRegression(random_state=51, max_iter=5000) # LR benefits from scaling
+        elif name == 'RandomForestClassifier':
+            scaled_model = RandomForestClassifier(random_state=51) # RF is less sensitive but for consistency
+        elif name == 'XGBClassifier':
+            scaled_model = XGBClassifier(eval_metric='logloss', random_state=51) # XGBoost also benefits from scaling sometimes
+        else:
+            scaled_model = model.__class__(**model.get_params()) # Re-instantiate with same params
+
+        scaled_model.fit(X_train_sc, y_train)
+        y_pred_scaled = scaled_model.predict(X_test_sc)
+        all_model_metrics[f'{name} (Scaled)'] = get_all_metrics(y_test, y_pred_scaled)
+
+    performance_df = pd.DataFrame.from_dict(all_model_metrics, orient='index')
+    return performance_df
+
+print("Defined evaluate_models function.")
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from xgboost import XGBClassifier
+
+def get_all_metrics(y_true, y_pred):
+    return {
+        'Accuracy': accuracy_score(y_true, y_pred),
+        'Precision': precision_score(y_true, y_pred, average='weighted'),
+        'Recall': recall_score(y_true, y_pred, average='weighted'),
+        'F1-Score': f1_score(y_true, y_pred, average='weighted')
+    }
+
+def evaluate_models(test_size):
+    X = cancer_df.drop(['target', 'cluster_label'], axis=1) # Exclude target and cluster_label for X
+    y = cancer_df['target']
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=51)
+
+    # Standardize the features
+    sc = StandardScaler()
+    X_train_sc = sc.fit_transform(X_train)
+    X_test_sc = sc.transform(X_test)
+
+    all_model_metrics = {}
+
+    models = {
+        'SVC': SVC(random_state=51),
+        'KNeighborsClassifier': KNeighborsClassifier(n_neighbors=5, metric='minkowski', p=2),
+        'GaussianNB': GaussianNB(),
+        'DecisionTreeClassifier': DecisionTreeClassifier(random_state=51),
+        'AdaBoostClassifier': AdaBoostClassifier(DecisionTreeClassifier(random_state=51), n_estimators=2000, learning_rate=0.1, algorithm='SAMME', random_state=51),
+        'LogisticRegression': LogisticRegression(random_state=51, max_iter=5000),
+        'RandomForestClassifier': RandomForestClassifier(random_state=51),
+        'XGBClassifier': XGBClassifier(eval_metric='logloss', random_state=51)
+    }
+
+    for name, model in models.items():
+        # Unscaled Data
+        # Create a fresh instance for unscaled to ensure no carry-over from scaled if models were re-used.
+        # This is particularly important for models like AdaBoost where base_estimator might get modified.
+        if name == 'AdaBoostClassifier':
+            unscaled_model = AdaBoostClassifier(DecisionTreeClassifier(random_state=51), n_estimators=2000, learning_rate=0.1, algorithm='SAMME', random_state=51)
+        elif name == 'SVC':
+            unscaled_model = SVC(random_state=51)
+        elif name == 'LogisticRegression':
+            unscaled_model = LogisticRegression(random_state=51, max_iter=5000)
+        elif name == 'RandomForestClassifier':
+            unscaled_model = RandomForestClassifier(random_state=51)
+        elif name == 'XGBClassifier':
+            unscaled_model = XGBClassifier(eval_metric='logloss', random_state=51)
+        else:
+            unscaled_model = model.__class__(**model.get_params()) # Re-instantiate with same params
+
+        unscaled_model.fit(X_train, y_train)
+        y_pred_unscaled = unscaled_model.predict(X_test)
+        all_model_metrics[f'{name} (Unscaled)'] = get_all_metrics(y_test, y_pred_unscaled)
+
+        # Scaled Data
+        if name == 'AdaBoostClassifier':
+            scaled_model = AdaBoostClassifier(DecisionTreeClassifier(random_state=51), n_estimators=2000, learning_rate=0.1, algorithm='SAMME', random_state=51)
+        elif name == 'SVC':
+            scaled_model = SVC(random_state=51) # SVC benefits greatly from scaling
+        elif name == 'LogisticRegression':
+            scaled_model = LogisticRegression(random_state=51, max_iter=5000) # LR benefits from scaling
+        elif name == 'RandomForestClassifier':
+            scaled_model = RandomForestClassifier(random_state=51) # RF is less sensitive but for consistency
+        elif name == 'XGBClassifier':
+            scaled_model = XGBClassifier(eval_metric='logloss', random_state=51) # XGBoost also benefits from scaling sometimes
+        else:
+            scaled_model = model.__class__(**model.get_params()) # Re-instantiate with same params
+
+        scaled_model.fit(X_train_sc, y_train)
+        y_pred_scaled = scaled_model.predict(X_test_sc)
+        all_model_metrics[f'{name} (Scaled)'] = get_all_metrics(y_test, y_pred_scaled)
+
+    performance_df = pd.DataFrame.from_dict(all_model_metrics, orient='index')
+    return performance_df
+
+print("Defined evaluate_models function with all necessary imports and the get_all_metrics helper function.")
+
+performance_85_train = evaluate_models(test_size=0.15)
+print("Model performance with 85% training data:")
+print(performance_85_train)
+
+plt.figure(figsize=(16, 8))
+sns.barplot(x=performance_85_train.index, y='Accuracy', hue=performance_85_train.index, data=performance_85_train, palette='viridis', legend=False)
+plt.xticks(rotation=90)
+plt.xlabel('Model')
+plt.ylabel('Accuracy')
+plt.title('Comparative Accuracy of Classification Models (85% Training Data)')
+plt.tight_layout()
+plt.show()
+
+performance_75_train = evaluate_models(test_size=0.25)
+print("Model performance with 75% training data:")
+print(performance_75_train)
+
+plt.figure(figsize=(16, 8))
+sns.barplot(x=performance_75_train.index, y='Accuracy', hue=performance_75_train.index, data=performance_75_train, palette='viridis', legend=False)
+plt.xticks(rotation=90)
+plt.xlabel('Model')
+plt.ylabel('Accuracy')
+plt.title('Comparative Accuracy of Classification Models (75% Training Data)')
+plt.tight_layout()
+plt.show()
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Create a dictionary to store performance metrics from both scenarios
+performance_metrics_dict = {
+    '85% Training': performance_85_train,
+    '75% Training': performance_75_train
+}
+
+# Concatenate the DataFrames into a single DataFrame
+combined_performance_df = pd.concat(performance_metrics_dict.values(), keys=performance_metrics_dict.keys(), names=['Training Size', 'Model Type'])
+
+# Reset index to make 'Training Size' and 'Model Type' regular columns
+combined_performance_df = combined_performance_df.reset_index()
+
+print("Combined Model Performance:")
+print(combined_performance_df)
+
+# Create a bar chart for comparative accuracy
+plt.figure(figsize=(18, 8))
+sns.barplot(x='Model Type', y='Accuracy', hue='Training Size', data=combined_performance_df, palette='viridis')
+plt.xticks(rotation=90)
+plt.xlabel('Model')
+plt.ylabel('Accuracy')
+plt.title('Comparative Accuracy of Classification Models by Training Data Size')
+plt.legend(title='Training Data Size')
+plt.tight_layout()
+plt.show()
+
+performance_80_train = evaluate_models(test_size=0.2)
+performance_80_train['Training Size'] = '80% Training'
+print("Model performance with 80% training data:\n")
+print(performance_80_train)
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Create a dictionary to store performance metrics from all scenarios
+performance_metrics_dict = {
+    '85% Training': performance_85_train.drop(columns=['Training Size'], errors='ignore'),
+    '80% Training': performance_80_train.drop(columns=['Training Size'], errors='ignore'),
+    '75% Training': performance_75_train.drop(columns=['Training Size'], errors='ignore')
+}
+
+# Concatenate the DataFrames into a single DataFrame
+combined_performance_df = pd.concat(performance_metrics_dict.values(), keys=performance_metrics_dict.keys(), names=['Training Size', 'Model Type'])
+
+# Reset index to make 'Training Size' and 'Model Type' regular columns
+combined_performance_df = combined_performance_df.reset_index()
+
+print("Combined Model Performance:")
+print(combined_performance_df)
+
+# Create a bar chart for comparative accuracy
+plt.figure(figsize=(18, 8))
+sns.barplot(x='Model Type', y='Accuracy', hue='Training Size', data=combined_performance_df, palette='viridis')
+plt.xticks(rotation=90)
+plt.xlabel('Model')
+plt.ylabel('Accuracy')
+plt.title('Comparative Accuracy of Classification Models by Training Data Size')
+plt.legend(title='Training Data Size')
+plt.tight_layout()
+plt.show()
